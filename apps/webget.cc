@@ -19,9 +19,9 @@ void get_URL(const string &host, const string &path) {
 
     cerr << "Function called: get_URL(" << host << ", " << path << ").\n";
 
-    Address *address = new Address(host, "http");
+    Address address(host, "http");
     TCPSocket socket;
-    socket.connect(*address);
+    socket.connect(address);
 
     socket.write("GET " + path + " HTTP/1.1\r\n");
     socket.write("Host: cs144.keithw.org\r\n");
