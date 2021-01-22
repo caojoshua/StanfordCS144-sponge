@@ -17,7 +17,14 @@ class ByteStream {
     // that's a sign that you probably want to keep exploring
     // different approaches.
 
+    size_t _capacity;
+    std::string _buffer{};
+    bool _eof{};
+    size_t _bytes_written{};
+    size_t _bytes_read{};
     bool _error{};  //!< Flag indicating that the stream suffered an error.
+
+    size_t bytes_to_read(const size_t len) const;
 
   public:
     //! Construct a stream with room for `capacity` bytes.
