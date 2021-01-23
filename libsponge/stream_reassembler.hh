@@ -4,7 +4,12 @@
 #include "byte_stream.hh"
 
 #include <cstdint>
+#include <limits>
+#include <list>
+#include <map>
 #include <string>
+
+#define MAX_EOF std::numeric_limits<size_t>::max()
 
 //! \brief A class that assembles a series of excerpts from a byte stream (possibly out of order,
 //! possibly overlapping) into an in-order byte stream.
@@ -12,8 +17,24 @@ class StreamReassembler {
   private:
     // Your code here -- add private members as necessary.
 
+    struct Byte {
+        size_t index;
+        char val;
+    };
+
     ByteStream _output;  //!< The reassembled in-order byte stream
     size_t _capacity;    //!< The maximum number of bytes
+    size_t _bytes_written;
+    size_t _index;
+    size_t _eof;  //!< The last index
+    bool _eof_set;
+    std::list<Byte> _unassembled_bytes{};
+
+    size_t remaining_capacity();
+    void set_eof(const size_t index);
+    void write_to_output(const Byte b);
+    void clean();
+    void push_unassembled_bytes(const std::string &data, const uint64_t index);
 
   public:
     //! \brief Construct a `StreamReassembler` that will store up to `capacity` bytes.
