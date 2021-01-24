@@ -26,12 +26,12 @@ class StreamReassembler {
     size_t _capacity;    //!< The maximum number of bytes
     size_t _bytes_written;
     size_t _index;
-    size_t _eof;  //!< The last index
+    size_t _eof;  //!< The index after the last index
     bool _eof_set;
     std::list<Byte> _unassembled_bytes{};
 
     size_t remaining_capacity();
-    void set_eof(const size_t index);
+    void set_eof(const size_t eof);
     void write_to_output(const Byte b);
     void clean();
     void push_unassembled_bytes(const std::string &data, const uint64_t index);

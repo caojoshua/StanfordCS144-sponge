@@ -17,24 +17,25 @@ using namespace std;
 
 size_t StreamReassembler::remaining_capacity() { return _capacity - unassembled_bytes() - _output.buffer_size(); }
 
-void StreamReassembler::set_eof(const size_t index) {
-    _eof = index;
+void StreamReassembler::set_eof(const size_t eof) {
+    _eof = eof;
     _eof_set = true;
 
-    if (_eof == _index)
+    // EOF already met
+    if (_eof <= _index + 1)
         _output.end_input();
 
     // Remove unassembled bytes with index after eof
     auto begin = _unassembled_bytes.rbegin();
     auto iter = _unassembled_bytes.rend();
-    while (iter != begin && iter->index > _eof) {
+    while (iter != begin && iter->index >= _eof) {
         _unassembled_bytes.erase(++iter.base());
     }
 }
 
 void StreamReassembler::write_to_output(const Byte b) {
     _output.write(std::string(1, b.val));
-    if (b.index == _eof && _eof_set)
+    if (b.index + 1 == _eof && _eof_set)
         _output.end_input();
     ++_index;
 }
@@ -107,22 +108,19 @@ void StreamReassembler::push_unassembled_bytes(const std::string &data, const ui
 }
 
 StreamReassembler::StreamReassembler(const size_t capacity)
-    : _output(capacity), _capacity(capacity), _bytes_written(0), _index(0), _eof(MAX_EOF), _eof_set(false) {
-}
+    : _output(capacity), _capacity(capacity), _bytes_written(0), _index(0), _eof(MAX_EOF), _eof_set(false) {}
 
 //! \details This function accepts a substring (aka a segment) of bytes,
 //! possibly out-of-order, from the logical stream, and assembles any newly
 //! contiguous substrings and writes them into the output stream in order.
 void StreamReassembler::push_substring(const string &data, const size_t index, const bool eof) {
     size_t size = data.size();
-    size_t last_index = index;
-    if (size != 0)
-        last_index += size - 1;
+    size_t last_index = index + size;
 
     if (eof)
         set_eof(last_index);
 
-    if (last_index < _index || data.size() == 0)
+    if (last_index < _index || size == 0)
         return;
 
     push_unassembled_bytes(data, index);
