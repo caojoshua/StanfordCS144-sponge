@@ -1,4 +1,5 @@
 #include "wrapping_integers.hh"
+
 #include <limits>
 
 #define MAX_SEQNO std::numeric_limits<uint32_t>::max()
@@ -14,16 +15,14 @@ void DUMMY_CODE(Targs &&... /* unused */) {}
 using namespace std;
 
 static int64_t abs(uint64_t _i) {
-  int64_t i = static_cast<int64_t>(_i);
-  return i >= 0 ? i : -i;
+    int64_t i = static_cast<int64_t>(_i);
+    return i >= 0 ? i : -i;
 }
 
 //! Transform an "absolute" 64-bit sequence number (zero-indexed) into a WrappingInt32
 //! \param n The input absolute 64-bit sequence number
 //! \param isn The initial sequence number
-WrappingInt32 wrap(uint64_t n, WrappingInt32 isn) {
-    return isn + n;
-}
+WrappingInt32 wrap(uint64_t n, WrappingInt32 isn) { return isn + n; }
 
 //! Transform a WrappingInt32 into an "absolute" 64-bit sequence number (zero-indexed)
 //! \param n The relative sequence number
@@ -52,18 +51,18 @@ uint64_t unwrap(WrappingInt32 n, WrappingInt32 isn, uint64_t checkpoint) {
 
     // Compute the left seqno.
     if (checkpoint > UINT32_MAX) {
-      uint64_t left_seqno = center_seqno - wrapping_boundary;
-      int64_t left_diff = abs(checkpoint - left_seqno);
-      if (left_diff < center_diff)
-        return left_seqno;
+        uint64_t left_seqno = center_seqno - wrapping_boundary;
+        int64_t left_diff = abs(checkpoint - left_seqno);
+        if (left_diff < center_diff)
+            return left_seqno;
     }
 
     // Compute the right seqno.
     if (checkpoint < UINT64_MAX - UINT32_MAX) {
-      uint64_t right_seqno = center_seqno + wrapping_boundary;
-      int64_t right_diff = abs(checkpoint - right_seqno);
-      if (right_diff < center_diff)
-        return right_seqno;
+        uint64_t right_seqno = center_seqno + wrapping_boundary;
+        int64_t right_diff = abs(checkpoint - right_seqno);
+        if (right_diff < center_diff)
+            return right_seqno;
     }
 
     // Return the center seqno if left and right seqnos were not the lowest difference.

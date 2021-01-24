@@ -2,6 +2,7 @@
 #define SPONGE_LIBSPONGE_STREAM_REASSEMBLER_HH
 
 #include "byte_stream.hh"
+
 #include <cstdint>
 #include <list>
 #include <string>
