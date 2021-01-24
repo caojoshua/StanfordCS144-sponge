@@ -1,7 +1,8 @@
 #include "stream_reassembler.hh"
-
 #include <cassert>
-#include <iostream>
+#include <limits>
+
+#define MAX_EOF std::numeric_limits<size_t>::max()
 
 // Dummy implementation of a stream reassembler.
 

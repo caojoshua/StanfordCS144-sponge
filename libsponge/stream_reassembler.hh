@@ -2,14 +2,9 @@
 #define SPONGE_LIBSPONGE_STREAM_REASSEMBLER_HH
 
 #include "byte_stream.hh"
-
 #include <cstdint>
-#include <limits>
 #include <list>
-#include <map>
 #include <string>
-
-#define MAX_EOF std::numeric_limits<size_t>::max()
 
 //! \brief A class that assembles a series of excerpts from a byte stream (possibly out of order,
 //! possibly overlapping) into an in-order byte stream.
