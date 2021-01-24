@@ -1,3 +1,7 @@
+caojoshua's fork of sponge. See [caojoshua's main CS144 repo](https://github.com/caojoshua/StanfordCS144-sponge) For more details. Original readme below.
+
+---
+
 For build prereqs, see [the CS144 VM setup instructions](https://web.stanford.edu/class/cs144/vm_howto).
 
 ## Sponge quickstart
