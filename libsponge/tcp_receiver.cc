@@ -26,9 +26,10 @@ void TCPReceiver::segment_received(const TCPSegment &seg) {
     }
 
     // Push the data to the reassembler.
-    std::string data = seg.payload().copy();
-    uint32_t reassembler_index = seqno - _isn - 1;
-    _reassembler.push_substring(data, reassembler_index, header.fin);
+    uint32_t reassembler_relative_index = seqno;
+    uint64_t unwrapped_index =
+        unwrap(WrappingInt32{reassembler_relative_index}, WrappingInt32{_isn + 1}, stream_out().bytes_written());
+    _reassembler.push_substring(seg.payload().copy(), unwrapped_index, header.fin);
 }
 
 optional<WrappingInt32> TCPReceiver::ackno() const {
@@ -36,8 +37,12 @@ optional<WrappingInt32> TCPReceiver::ackno() const {
         return optional<WrappingInt32>{};
 
     uint32_t ack_bytes = stream_out().bytes_written();
+
+    // Increment if acknowledged SYN byte
     if (_syn_recv)
         ++ack_bytes;
+
+    // Increment if acknowledged FIN byte
     if (stream_out().input_ended())
         ++ack_bytes;
 
