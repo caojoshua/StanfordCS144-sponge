@@ -15,6 +15,8 @@
 //! remote TCPSender.
 class TCPReceiver {
 
+    uint64_t assembled_bytes() const;
+
     //! Our data structure for re-assembling bytes.
     StreamReassembler _reassembler;
 
