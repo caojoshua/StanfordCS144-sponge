@@ -14,16 +14,15 @@
 //! the acknowledgment number and window size to advertise back to the
 //! remote TCPSender.
 class TCPReceiver {
-
     //! Our data structure for re-assembling bytes.
     StreamReassembler _reassembler;
 
     //! The maximum number of bytes we'll store.
     size_t _capacity;
 
-    bool _syn_recv{};   // SYN (beginning of stream) received.
-    uint32_t _isn{};    // Initial Sequence Number.
-    uint64_t _ack_bytes{};    // Total acknowledge bytes.
+    bool _syn_recv{};       // SYN (beginning of stream) received.
+    uint32_t _isn{};        // Initial Sequence Number.
+    uint64_t _ack_bytes{};  // Total acknowledge bytes.
 
   public:
     //! \brief Construct a TCP receiver

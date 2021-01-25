@@ -20,10 +20,9 @@ void TCPReceiver::segment_received(const TCPSegment &seg) {
         if (header.syn) {
             _syn_recv = true;
             _isn = seqno;
-            ++seqno; // Skip SYN byte, since its not a data byte.
-        }
-        else
-          return;
+            ++seqno;  // Skip SYN byte, since its not a data byte.
+        } else
+            return;
     }
 
     // Push the data to the reassembler.
@@ -45,6 +44,4 @@ optional<WrappingInt32> TCPReceiver::ackno() const {
     return optional<WrappingInt32>{_isn + ack_bytes};
 }
 
-size_t TCPReceiver::window_size() const {
-  return _capacity - stream_out().buffer_size();
-}
+size_t TCPReceiver::window_size() const { return _capacity - stream_out().buffer_size(); }
