@@ -20,7 +20,6 @@ class StreamReassembler {
 
     ByteStream _output;  //!< The reassembled in-order byte stream
     size_t _capacity;    //!< The maximum number of bytes
-    size_t _bytes_written;
     size_t _index;
     size_t _eof;  //!< The index after the last index
     bool _eof_set;
