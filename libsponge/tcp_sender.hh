@@ -29,6 +29,7 @@ class TCPSender {
 
     //! retransmission timer for the connection
     unsigned int _initial_retransmission_timeout;
+    uint64_t _retransmission_timeout;
 
     //! outgoing stream of bytes that have not yet been sent
     ByteStream _stream;
@@ -39,6 +40,14 @@ class TCPSender {
     //! the window size advertised by the reciever. initalized to 1
     uint16_t _window_size{1};
 
+    //! the transmission timer used to determine when to send oustanding segments
+    bool _retransmission_timer_on{false};
+    unsigned int _retransmission_timer{0};
+
+    //! number of consecutive retransmissions to determine if a connection is hopeless
+    uint32_t _consecutive_retransmissions{};
+
+    void send_new_segment(TCPSegment segment);
     void send_segment(TCPSegment segment);
 
   public:

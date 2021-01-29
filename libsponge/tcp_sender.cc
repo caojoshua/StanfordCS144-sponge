@@ -15,13 +15,25 @@ void DUMMY_CODE(Targs &&... /* unused */) {}
 
 using namespace std;
 
-void TCPSender::send_segment(TCPSegment segment) {
+// Send a segment to the outbound queue that has not been sent yet
+void TCPSender::send_new_segment(TCPSegment segment) {
     segment.header().seqno = wrap(_next_seqno, _isn);
-    _segments_out.push(segment);
+    _next_seqno += segment.length_in_sequence_space();
+    send_segment(segment);
+}
 
+// Send a segment to the outbound queue
+void TCPSender::send_segment(TCPSegment segment) {
+    // Reset the timer if the segment has positive length
     uint16_t length = segment.length_in_sequence_space();
-    _window_size -= length;
-    _next_seqno += length;
+    if (length > 0) {
+        _window_size -= length;
+        _retransmission_timer_on = true;
+        _retransmission_timer = 0;
+    }
+
+    // Send the segment to the outbound queue
+    _segments_out.push(segment);
 
     // Add to outstanding segments sorted by first seqno.
     // TODO: maybe need to use wrapping int
@@ -44,15 +56,15 @@ void TCPSender::send_segment(TCPSegment segment) {
 TCPSender::TCPSender(const size_t capacity, const uint16_t retx_timeout, const std::optional<WrappingInt32> fixed_isn)
     : _isn(fixed_isn.value_or(WrappingInt32{random_device()()}))
     , _initial_retransmission_timeout{retx_timeout}
+    , _retransmission_timeout{retx_timeout}
     , _stream(capacity) {
     std::cout << "new\n";
 
     // Send a segment with only the SYN byte.
-    Buffer buffer("");
     TCPSegment segment;
-    segment.parse(buffer);
+    segment.payload() = Buffer("");
     segment.header().syn = true;
-    send_segment(segment);
+    send_new_segment(segment);
 }
 
 uint64_t TCPSender::bytes_in_flight() const {
@@ -73,7 +85,7 @@ void TCPSender::fill_window() {
         _window_size < TCPConfig::MAX_PAYLOAD_SIZE ? _window_size : TCPConfig::MAX_PAYLOAD_SIZE;
     TCPSegment segment;
     segment.payload() = Buffer(_stream.read(bytes_to_read));
-    send_segment(segment);
+    send_new_segment(segment);
 }
 
 //! \param ackno The remote receiver's ackno (acknowledgment number)
@@ -94,13 +106,40 @@ void TCPSender::ack_received(const WrappingInt32 ackno, const uint16_t window_si
         _outstanding_segments.erase(temp_iter);
     }
 
+    // Reset retransmission member variables
+    _retransmission_timeout = _initial_retransmission_timeout;
+    _retransmission_timer = 0;
+    _retransmission_timer_on = !_outstanding_segments.empty();
+    _consecutive_retransmissions = 0;
+
     _window_size = window_size;
     fill_window();
 }
 
 //! \param[in] ms_since_last_tick the number of milliseconds since the last call to this method
-void TCPSender::tick(const size_t ms_since_last_tick) { DUMMY_CODE(ms_since_last_tick); }
+void TCPSender::tick(const size_t ms_since_last_tick) {
+    if (!_retransmission_timer_on || _consecutive_retransmissions > TCPConfig::MAX_RETX_ATTEMPTS)
+        return;
 
-unsigned int TCPSender::consecutive_retransmissions() const { return {}; }
+    _retransmission_timer += ms_since_last_tick;
+
+    if (_retransmission_timer >= _retransmission_timeout) {
+        // Send an oustanding segment
+        TCPSegment segment = _outstanding_segments.front();
+        _outstanding_segments.pop_front();
+        send_segment(segment);
+
+        // Update retransmissions variables
+        if (_window_size > 0) {
+            ++_consecutive_retransmissions;
+            _retransmission_timeout *= 2;
+            _retransmission_timer = 0;
+        }
+    }
+}
+
+unsigned int TCPSender::consecutive_retransmissions() const {
+    return _consecutive_retransmissions;
+}
 
 void TCPSender::send_empty_segment() {}
