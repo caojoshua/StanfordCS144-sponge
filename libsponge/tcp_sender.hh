@@ -7,6 +7,7 @@
 #include "wrapping_integers.hh"
 
 #include <functional>
+#include <list>
 #include <queue>
 
 //! \brief The "sender" part of a TCP implementation.
@@ -23,6 +24,9 @@ class TCPSender {
     //! outbound queue of segments that the TCPSender wants sent
     std::queue<TCPSegment> _segments_out{};
 
+    //! List of outstanding segments, sorted by the first seqno.
+    std::list<TCPSegment> _outstanding_segments{};
+
     //! retransmission timer for the connection
     unsigned int _initial_retransmission_timeout;
 
@@ -31,6 +35,11 @@ class TCPSender {
 
     //! the (absolute) sequence number for the next byte to be sent
     uint64_t _next_seqno{0};
+
+    //! the window size advertised by the reciever. initalized to 1
+    uint16_t _window_size{1};
+
+    void send_segment(TCPSegment segment);
 
   public:
     //! Initialize a TCPSender
