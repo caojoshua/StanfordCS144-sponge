@@ -51,7 +51,7 @@ class TCPSender {
     bool _fin_sent{false};
 
     void send_new_segment(TCPSegment segment);
-    void send_segment(TCPSegment segment);
+    void send_segment(const TCPSegment segment);
 
   public:
     //! Initialize a TCPSender

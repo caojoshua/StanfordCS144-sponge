@@ -17,23 +17,17 @@ using namespace std;
 
 // Send a segment to the outbound queue that has not been sent yet. Don't send empty segments.
 void TCPSender::send_new_segment(TCPSegment segment) {
-    size_t length = segment.length_in_sequence_space();
-    if (length == 0) {
-      std::cout << "reject length 0\n";
-        return;
-    }
-
-    segment.header().seqno = wrap(_next_seqno, _isn);
-    _next_seqno += length;
+    segment.header().seqno = next_seqno();
+    _next_seqno += segment.length_in_sequence_space();
     send_segment(segment);
 }
 
 // Send a segment to the outbound queue
-void TCPSender::send_segment(TCPSegment segment) {
-    _segments_out.push(segment);
-
+void TCPSender::send_segment(const TCPSegment segment) {
     uint16_t length = segment.length_in_sequence_space();
     if (length > 0) {
+        _segments_out.push(segment);
+
         // Reset the timer if the segment has positive length
         _window_size -= length;
         _retransmission_timer_on = true;
@@ -152,4 +146,9 @@ unsigned int TCPSender::consecutive_retransmissions() const {
     return _consecutive_retransmissions;
 }
 
-void TCPSender::send_empty_segment() {}
+void TCPSender::send_empty_segment() {
+    TCPSegment segment;
+    segment.header().seqno = next_seqno();
+    segment.payload() = Buffer("");
+    send_segment(segment);
+}
