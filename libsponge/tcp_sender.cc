@@ -15,39 +15,44 @@ void DUMMY_CODE(Targs &&... /* unused */) {}
 
 using namespace std;
 
-// Send a segment to the outbound queue that has not been sent yet
+// Send a segment to the outbound queue that has not been sent yet. Don't send empty segments.
 void TCPSender::send_new_segment(TCPSegment segment) {
+    size_t length = segment.length_in_sequence_space();
+    if (length == 0) {
+      std::cout << "reject length 0\n";
+        return;
+    }
+
     segment.header().seqno = wrap(_next_seqno, _isn);
-    _next_seqno += segment.length_in_sequence_space();
+    _next_seqno += length;
     send_segment(segment);
 }
 
 // Send a segment to the outbound queue
 void TCPSender::send_segment(TCPSegment segment) {
-    // Reset the timer if the segment has positive length
+    _segments_out.push(segment);
+
     uint16_t length = segment.length_in_sequence_space();
     if (length > 0) {
+        // Reset the timer if the segment has positive length
         _window_size -= length;
         _retransmission_timer_on = true;
         _retransmission_timer = 0;
-    }
 
-    // Send the segment to the outbound queue
-    _segments_out.push(segment);
-
-    // Add to outstanding segments sorted by first seqno.
-    // TODO: maybe need to use wrapping int
-    uint32_t seqno = segment.header().seqno.raw_value();
-    auto iter = _outstanding_segments.cbegin();
-    auto end = _outstanding_segments.cend();
-    while (iter != end) {
-        if (seqno < iter->header().seqno.raw_value()) {
-            _outstanding_segments.insert(iter, segment);
-            return;
+        // Add to outstanding segments sorted by first seqno.
+        // TODO: maybe need to use wrapping int
+        uint32_t seqno = segment.header().seqno.raw_value();
+        auto iter = _outstanding_segments.cbegin();
+        auto end = _outstanding_segments.cend();
+        while (iter != end) {
+            if (seqno < iter->header().seqno.raw_value()) {
+                _outstanding_segments.insert(iter, segment);
+                return;
+            }
+            ++iter;
         }
-        ++iter;
+        _outstanding_segments.push_back(segment);
     }
-    _outstanding_segments.push_back(segment);
 }
 
 //! \param[in] capacity the capacity of the outgoing byte stream
@@ -58,11 +63,9 @@ TCPSender::TCPSender(const size_t capacity, const uint16_t retx_timeout, const s
     , _initial_retransmission_timeout{retx_timeout}
     , _retransmission_timeout{retx_timeout}
     , _stream(capacity) {
-    std::cout << "new\n";
-
+      std::cout<<"new\n";
     // Send a segment with only the SYN byte.
     TCPSegment segment;
-    segment.payload() = Buffer("");
     segment.header().syn = true;
     send_new_segment(segment);
 }
@@ -75,16 +78,23 @@ uint64_t TCPSender::bytes_in_flight() const {
 }
 
 void TCPSender::fill_window() {
-    // Send the FIN byte if input ended.
-    if (_stream.buffer_empty() || _window_size == 0)
+    // Can't fill an empty window
+    if (_window_size == 0)
         return;
 
-    // Add the segment to the outbound queue.
-    // TODO: not sure if need to manually set header flags eg. SYN, FIN, WIN
-    const uint16_t bytes_to_read =
-        _window_size < TCPConfig::MAX_PAYLOAD_SIZE ? _window_size : TCPConfig::MAX_PAYLOAD_SIZE;
+    // Read bytes from the input stream. Attempt to read enough bytes to fill up the whole window.
     TCPSegment segment;
+    uint16_t bytes_to_read = _window_size < TCPConfig::MAX_PAYLOAD_SIZE ? _window_size :
+        TCPConfig::MAX_PAYLOAD_SIZE;
     segment.payload() = Buffer(_stream.read(bytes_to_read));
+
+    // Add the FIN byte
+    if (_stream.eof() && !_fin_sent && segment.payload().size() < _window_size) {
+        _fin_sent = true;
+        segment.header().fin = true;
+    }
+
+    // Add the segment to the outbound queue.
     send_new_segment(segment);
 }
 

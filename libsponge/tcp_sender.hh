@@ -47,6 +47,9 @@ class TCPSender {
     //! number of consecutive retransmissions to determine if a connection is hopeless
     uint32_t _consecutive_retransmissions{};
 
+    //! if FIN byte has been sent
+    bool _fin_sent{false};
+
     void send_new_segment(TCPSegment segment);
     void send_segment(TCPSegment segment);
 
