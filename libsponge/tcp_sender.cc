@@ -27,11 +27,13 @@ void TCPSender::send_segment(const TCPSegment segment) {
     uint16_t length = segment.length_in_sequence_space();
     if (length > 0) {
         _segments_out.push(segment);
+        _window_size -= segment.length_in_sequence_space();
 
-        // Reset the timer if the segment has positive length
-        _window_size -= length;
-        _retransmission_timer_on = true;
-        _retransmission_timer = 0;
+        // Reset the timer
+        if (!_retransmission_timer_on) {
+            _retransmission_timer_on = true;
+            _retransmission_timer = 0;
+        }
 
         // Add to outstanding segments sorted by first seqno.
         // TODO: maybe need to use wrapping int
@@ -77,33 +79,45 @@ void TCPSender::fill_window() {
         return;
 
     // Read bytes from the input stream. Attempt to read enough bytes to fill up the whole window.
-    TCPSegment segment;
-    uint16_t bytes_to_read = _window_size < TCPConfig::MAX_PAYLOAD_SIZE ? _window_size :
-        TCPConfig::MAX_PAYLOAD_SIZE;
-    segment.payload() = Buffer(_stream.read(bytes_to_read));
+    while (_window_size > 0 && !_stream.buffer_empty()) {
+        TCPSegment segment;
+        uint16_t bytes_to_read = _window_size < TCPConfig::MAX_PAYLOAD_SIZE ? _window_size :
+            TCPConfig::MAX_PAYLOAD_SIZE;
+        segment.payload() = Buffer(_stream.read(bytes_to_read));
 
-    // Add the FIN byte
-    if (_stream.eof() && !_fin_sent && segment.payload().size() < _window_size) {
-        _fin_sent = true;
-        segment.header().fin = true;
+        // Add the FIN byte
+        if (_stream.eof() && !_fin_sent && segment.payload().size() < _window_size) {
+            _fin_sent = true;
+            segment.header().fin = true;
+        }
+
+        // Add the segment to the outbound queue.
+        send_new_segment(segment);
     }
 
-    // Add the segment to the outbound queue.
-    send_new_segment(segment);
+    // Add a segment with just the FIN byte
+    if (_stream.eof() && !_fin_sent && _window_size > 0) {
+        _fin_sent = true;
+        TCPSegment fin_segment;
+        fin_segment.header().fin = true;
+        send_new_segment(fin_segment);
+    }
 }
 
 //! \param ackno The remote receiver's ackno (acknowledgment number)
 //! \param window_size The remote receiver's advertised window size
+// TODO: not sure if we need wrapping here
 void TCPSender::ack_received(const WrappingInt32 ackno, const uint16_t window_size) {
-    // Return if invalid seqno
-    if (ackno.raw_value() > _isn.raw_value() + _next_seqno)
+    // Return if invalid or old ackno
+    uint32_t ackno_val = ackno.raw_value();
+    if (ackno_val > _isn.raw_value() + _next_seqno)
         return;
 
     // Remove acknowledged outstanding segments.
     auto iter = _outstanding_segments.cbegin();
     auto end = _outstanding_segments.cend();
     TCPHeader iter_header = iter->header();
-    while (iter != end && iter_header.seqno.raw_value() + iter_header.win < ackno.raw_value()) {
+    while (iter != end && iter_header.seqno.raw_value() + iter->length_in_sequence_space() - 1 < ackno_val) {
         auto temp_iter = iter;
         ++iter;
         iter_header = iter->header();
@@ -111,10 +125,14 @@ void TCPSender::ack_received(const WrappingInt32 ackno, const uint16_t window_si
     }
 
     // Reset retransmission member variables
-    _retransmission_timeout = _initial_retransmission_timeout;
-    _retransmission_timer = 0;
-    _retransmission_timer_on = !_outstanding_segments.empty();
-    _consecutive_retransmissions = 0;
+    // TODO: this hella broken
+    if (ackno_val > _ackno) {
+        _retransmission_timeout = _initial_retransmission_timeout;
+        _retransmission_timer = 0;
+        _retransmission_timer_on = !_outstanding_segments.empty();
+        _consecutive_retransmissions = 0;
+    }
+    _ackno = ackno_val;
 
     _window_size = window_size;
     fill_window();
