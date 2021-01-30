@@ -108,11 +108,7 @@ void TCPSender::fill_window() {
 //! \param window_size The remote receiver's advertised window size
 // TODO: not sure if we need wrapping here
 void TCPSender::ack_received(const WrappingInt32 ackno, const uint16_t window_size) {
-    // Return if invalid or old ackno
     uint32_t ackno_val = ackno.raw_value();
-    if (ackno_val > _isn.raw_value() + _next_seqno && ackno_val <= _ackno)
-        return;
-    _ackno = ackno_val;
 
     // Remove acknowledged outstanding segments.
     auto iter = _outstanding_segments.cbegin();
@@ -124,6 +120,14 @@ void TCPSender::ack_received(const WrappingInt32 ackno, const uint16_t window_si
         iter_header = iter->header();
         _outstanding_segments.erase(temp_iter);
     }
+
+    uint32_t ackno_right = ackno_val + window_size;
+    uint32_t next_seqno_val = next_seqno().raw_value();
+
+    // Return if invalid or old ackno
+    if (ackno_val > next_seqno_val || ackno_right <= _highest_ackno)
+        return;
+    _highest_ackno = ackno_right;
 
     // Reset retransmission member variables
     _retransmission_timeout = _initial_retransmission_timeout;
