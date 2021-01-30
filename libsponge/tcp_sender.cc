@@ -2,7 +2,6 @@
 
 #include "tcp_config.hh"
 
-#include <iostream>
 #include <random>
 
 // Dummy implementation of a TCP sender
@@ -29,7 +28,7 @@ void TCPSender::send_segment(const TCPSegment segment) {
         return;
 
     _segments_out.push(segment);
-    _window_size -= length;
+    _window_size = _window_size < length ? 0 : _window_size - length;
 
     // Reset the timer
     if (!_retransmission_timer_on) {
@@ -60,7 +59,6 @@ TCPSender::TCPSender(const size_t capacity, const uint16_t retx_timeout, const s
     , _initial_retransmission_timeout{retx_timeout}
     , _retransmission_timeout{retx_timeout}
     , _stream(capacity) {
-    std::cout << "new\n";
     // Send a segment with only the SYN byte.
     TCPSegment segment;
     segment.header().syn = true;
@@ -133,9 +131,8 @@ void TCPSender::ack_received(const WrappingInt32 ackno, const uint16_t window_si
     if (window_size == 0) {
         // Advertised window size of 0 should be treated as 1
         _window_size = 1;
-        _window_advertised_empty = true;
-    }
-    if (window_size > 0) {
+        _window_empty = true;
+    } else {
         // Reset retransmission member variables
         _retransmission_timeout = _initial_retransmission_timeout;
         _retransmission_timer = 0;
@@ -143,7 +140,7 @@ void TCPSender::ack_received(const WrappingInt32 ackno, const uint16_t window_si
         _consecutive_retransmissions = 0;
 
         _window_size = window_size;
-        _window_advertised_empty = false;
+        _window_empty = false;
     }
 
     fill_window();
@@ -164,7 +161,7 @@ void TCPSender::tick(const size_t ms_since_last_tick) {
         _retransmission_timer = 0;
 
         // Update retransmissions variables
-        if (!_window_advertised_empty || _window_size == 0) {
+        if (!_window_empty) {
             ++_consecutive_retransmissions;
             _retransmission_timeout *= 2;
         }
@@ -173,6 +170,7 @@ void TCPSender::tick(const size_t ms_since_last_tick) {
 
 unsigned int TCPSender::consecutive_retransmissions() const { return _consecutive_retransmissions; }
 
+// Not sure if need to reset the retransmission timer here
 void TCPSender::send_empty_segment() {
     TCPSegment segment;
     segment.header().seqno = next_seqno();

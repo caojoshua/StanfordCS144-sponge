@@ -53,9 +53,9 @@ class TCPSender {
     //! if FIN byte has been sent
     bool _fin_sent{false};
 
-    //! if Window size advertised as empty. Only set the true when window size is 0 on
-    //  ack_received, and not when window size is initialized to 0.
-    bool _window_advertised_empty{false};
+    //! if window size is empty. Need to keep track of this because when the window size is empty,
+    //  it will be set to 1.
+    bool _window_empty{false};
 
     void send_new_segment(TCPSegment segment);
     void send_segment(const TCPSegment segment);
