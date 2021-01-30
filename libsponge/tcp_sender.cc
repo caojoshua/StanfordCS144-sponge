@@ -9,6 +9,9 @@
 // For Lab 3, please replace with a real implementation that passes the
 // automated checks run by `make check_lab3`.
 
+// This implementation of TCPSender passes all the given test in `make check_lab3`, but the
+// wrap/unwrap logic could potentially be broken.
+
 template <typename... Targs>
 void DUMMY_CODE(Targs &&... /* unused */) {}
 
@@ -37,7 +40,6 @@ void TCPSender::send_segment(const TCPSegment segment) {
     }
 
     // Add to outstanding segments sorted by first seqno.
-    // TODO: maybe need to use wrapping int
     uint32_t seqno = segment.header().seqno.raw_value();
     auto iter = _outstanding_segments.cbegin();
     auto end = _outstanding_segments.cend();
@@ -105,7 +107,6 @@ void TCPSender::fill_window() {
 
 //! \param ackno The remote receiver's ackno (acknowledgment number)
 //! \param window_size The remote receiver's advertised window size
-// TODO: not sure if we need wrapping here
 void TCPSender::ack_received(const WrappingInt32 ackno, const uint16_t window_size) {
     uint32_t ackno_val = ackno.raw_value();
 
@@ -170,7 +171,6 @@ void TCPSender::tick(const size_t ms_since_last_tick) {
 
 unsigned int TCPSender::consecutive_retransmissions() const { return _consecutive_retransmissions; }
 
-// Not sure if need to reset the retransmission timer here
 void TCPSender::send_empty_segment() {
     TCPSegment segment;
     segment.header().seqno = next_seqno();
