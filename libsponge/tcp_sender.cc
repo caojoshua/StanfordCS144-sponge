@@ -110,8 +110,9 @@ void TCPSender::fill_window() {
 void TCPSender::ack_received(const WrappingInt32 ackno, const uint16_t window_size) {
     // Return if invalid or old ackno
     uint32_t ackno_val = ackno.raw_value();
-    if (ackno_val > _isn.raw_value() + _next_seqno)
+    if (ackno_val > _isn.raw_value() + _next_seqno && ackno_val <= _ackno)
         return;
+    _ackno = ackno_val;
 
     // Remove acknowledged outstanding segments.
     auto iter = _outstanding_segments.cbegin();
@@ -125,14 +126,10 @@ void TCPSender::ack_received(const WrappingInt32 ackno, const uint16_t window_si
     }
 
     // Reset retransmission member variables
-    // TODO: this hella broken
-    if (ackno_val > _ackno) {
-        _retransmission_timeout = _initial_retransmission_timeout;
-        _retransmission_timer = 0;
-        _retransmission_timer_on = !_outstanding_segments.empty();
-        _consecutive_retransmissions = 0;
-    }
-    _ackno = ackno_val;
+    _retransmission_timeout = _initial_retransmission_timeout;
+    _retransmission_timer = 0;
+    _retransmission_timer_on = !_outstanding_segments.empty();
+    _consecutive_retransmissions = 0;
 
     _window_size = window_size;
     fill_window();

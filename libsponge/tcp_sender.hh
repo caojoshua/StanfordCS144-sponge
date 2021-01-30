@@ -48,7 +48,7 @@ class TCPSender {
     uint32_t _consecutive_retransmissions{};
 
     //! highest ackno
-    int64_t _ackno{-1};
+    uint32_t _ackno{0};
 
     //! if FIN byte has been sent
     bool _fin_sent{false};
