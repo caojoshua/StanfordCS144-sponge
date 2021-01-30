@@ -25,30 +25,31 @@ void TCPSender::send_new_segment(TCPSegment segment) {
 // Send a segment to the outbound queue
 void TCPSender::send_segment(const TCPSegment segment) {
     uint16_t length = segment.length_in_sequence_space();
-    if (length > 0) {
-        _segments_out.push(segment);
-        _window_size -= segment.length_in_sequence_space();
+    if (length == 0)
+        return;
 
-        // Reset the timer
-        if (!_retransmission_timer_on) {
-            _retransmission_timer_on = true;
-            _retransmission_timer = 0;
-        }
+    _segments_out.push(segment);
+    _window_size -= length;
 
-        // Add to outstanding segments sorted by first seqno.
-        // TODO: maybe need to use wrapping int
-        uint32_t seqno = segment.header().seqno.raw_value();
-        auto iter = _outstanding_segments.cbegin();
-        auto end = _outstanding_segments.cend();
-        while (iter != end) {
-            if (seqno < iter->header().seqno.raw_value()) {
-                _outstanding_segments.insert(iter, segment);
-                return;
-            }
-            ++iter;
-        }
-        _outstanding_segments.push_back(segment);
+    // Reset the timer
+    if (!_retransmission_timer_on) {
+        _retransmission_timer_on = true;
+        _retransmission_timer = 0;
     }
+
+    // Add to outstanding segments sorted by first seqno.
+    // TODO: maybe need to use wrapping int
+    uint32_t seqno = segment.header().seqno.raw_value();
+    auto iter = _outstanding_segments.cbegin();
+    auto end = _outstanding_segments.cend();
+    while (iter != end) {
+        if (seqno < iter->header().seqno.raw_value()) {
+            _outstanding_segments.insert(iter, segment);
+            return;
+        }
+        ++iter;
+    }
+    _outstanding_segments.push_back(segment);
 }
 
 //! \param[in] capacity the capacity of the outgoing byte stream
@@ -59,7 +60,7 @@ TCPSender::TCPSender(const size_t capacity, const uint16_t retx_timeout, const s
     , _initial_retransmission_timeout{retx_timeout}
     , _retransmission_timeout{retx_timeout}
     , _stream(capacity) {
-      std::cout<<"new\n";
+    std::cout << "new\n";
     // Send a segment with only the SYN byte.
     TCPSegment segment;
     segment.header().syn = true;
@@ -74,15 +75,15 @@ uint64_t TCPSender::bytes_in_flight() const {
 }
 
 void TCPSender::fill_window() {
-    // Can't fill an empty window
+    // Can't fill empty window
     if (_window_size == 0)
         return;
 
     // Read bytes from the input stream. Attempt to read enough bytes to fill up the whole window.
     while (_window_size > 0 && !_stream.buffer_empty()) {
         TCPSegment segment;
-        uint16_t bytes_to_read = _window_size < TCPConfig::MAX_PAYLOAD_SIZE ? _window_size :
-            TCPConfig::MAX_PAYLOAD_SIZE;
+        uint16_t bytes_to_read =
+            _window_size < TCPConfig::MAX_PAYLOAD_SIZE ? _window_size : TCPConfig::MAX_PAYLOAD_SIZE;
         segment.payload() = Buffer(_stream.read(bytes_to_read));
 
         // Add the FIN byte
@@ -129,13 +130,22 @@ void TCPSender::ack_received(const WrappingInt32 ackno, const uint16_t window_si
         return;
     _highest_ackno = ackno_right;
 
-    // Reset retransmission member variables
-    _retransmission_timeout = _initial_retransmission_timeout;
-    _retransmission_timer = 0;
-    _retransmission_timer_on = !_outstanding_segments.empty();
-    _consecutive_retransmissions = 0;
+    if (window_size == 0) {
+        // Advertised window size of 0 should be treated as 1
+        _window_size = 1;
+        _window_advertised_empty = true;
+    }
+    if (window_size > 0) {
+        // Reset retransmission member variables
+        _retransmission_timeout = _initial_retransmission_timeout;
+        _retransmission_timer = 0;
+        _retransmission_timer_on = !_outstanding_segments.empty();
+        _consecutive_retransmissions = 0;
 
-    _window_size = window_size;
+        _window_size = window_size;
+        _window_advertised_empty = false;
+    }
+
     fill_window();
 }
 
@@ -151,23 +161,21 @@ void TCPSender::tick(const size_t ms_since_last_tick) {
         TCPSegment segment = _outstanding_segments.front();
         _outstanding_segments.pop_front();
         send_segment(segment);
+        _retransmission_timer = 0;
 
         // Update retransmissions variables
-        if (_window_size > 0) {
+        if (!_window_advertised_empty || _window_size == 0) {
             ++_consecutive_retransmissions;
             _retransmission_timeout *= 2;
-            _retransmission_timer = 0;
         }
     }
 }
 
-unsigned int TCPSender::consecutive_retransmissions() const {
-    return _consecutive_retransmissions;
-}
+unsigned int TCPSender::consecutive_retransmissions() const { return _consecutive_retransmissions; }
 
 void TCPSender::send_empty_segment() {
     TCPSegment segment;
     segment.header().seqno = next_seqno();
     segment.payload() = Buffer("");
-    send_segment(segment);
+    _segments_out.push(segment);
 }
