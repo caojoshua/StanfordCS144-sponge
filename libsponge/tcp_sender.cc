@@ -3,7 +3,6 @@
 #include "tcp_config.hh"
 
 #include <random>
-#include <iostream>
 
 // Dummy implementation of a TCP sender
 
@@ -61,12 +60,7 @@ TCPSender::TCPSender(const size_t capacity, const uint16_t retx_timeout, const s
     : _isn(fixed_isn.value_or(WrappingInt32{random_device()()}))
     , _initial_retransmission_timeout{retx_timeout}
     , _retransmission_timeout{retx_timeout}
-    , _stream(capacity) {
-    // Send a segment with only the SYN byte.
-    TCPSegment segment;
-    segment.header().syn = true;
-    send_new_segment(segment);
-}
+    , _stream(capacity) {}
 
 uint64_t TCPSender::bytes_in_flight() const {
     uint64_t bytes = 0;
@@ -76,6 +70,13 @@ uint64_t TCPSender::bytes_in_flight() const {
 }
 
 void TCPSender::fill_window() {
+    // Send a segment with only the SYN byte if not sent yet, regardless of window size.
+    if (_next_seqno == 0) {
+        TCPSegment segment;
+        segment.header().syn = true;
+        send_new_segment(segment);
+    }
+
     // Can't fill empty window
     if (_window_size == 0)
         return;

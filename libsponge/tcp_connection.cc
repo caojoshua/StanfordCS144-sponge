@@ -84,7 +84,8 @@ void TCPConnection::tick(const size_t ms_since_last_tick) {
 void TCPConnection::end_input_stream() {}
 
 void TCPConnection::connect() {
-    // Send segment with SYN flag. Assume SYN flag is already enqueued.
+    // Fill window with SYN byte and send to network.
+    _sender.fill_window();
     send_segments();
     _active = true;
 }
