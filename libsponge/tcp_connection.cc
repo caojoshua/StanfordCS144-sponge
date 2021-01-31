@@ -12,6 +12,24 @@ void DUMMY_CODE(Targs &&... /* unused */) {}
 
 using namespace std;
 
+// Send all the segments enqueued by the sender
+void TCPConnection::send_segments() {
+    std::queue<TCPSegment> sender_segments_out = _sender.segments_out();
+    while (!sender_segments_out.empty()) {
+        TCPSegment seg = sender_segments_out.front();
+        TCPHeader header = seg.header();
+        std::optional<WrappingInt32> ackno = _receiver.ackno();
+
+        // If ackno exists, add ackno and window size to the header.
+        if (ackno) {
+            header.ackno = ackno.value();
+            header.win = _receiver.window_size();
+        }
+        sender_segments_out.pop();
+        _segments_out.push(seg);
+    }
+}
+
 size_t TCPConnection::remaining_outbound_capacity() const { return {}; }
 
 size_t TCPConnection::bytes_in_flight() const { return {}; }
@@ -20,7 +38,31 @@ size_t TCPConnection::unassembled_bytes() const { return {}; }
 
 size_t TCPConnection::time_since_last_segment_received() const { return {}; }
 
-void TCPConnection::segment_received(const TCPSegment &seg) { DUMMY_CODE(seg); }
+void TCPConnection::segment_received(const TCPSegment &seg) {
+    TCPHeader header = seg.header();
+
+    // If segment has reset flag, kill connection.
+    if (header.rst) {
+        _receiver.stream_out().set_error();
+        _sender.stream_in().set_error();
+        // TODO: kill connection permanently
+        return;
+    }
+
+    // Send the segment to the receiver.
+    _receiver.segment_received(seg);
+
+    // Send the segment to the sender
+    if (header.ack)
+        _sender.ack_received(header.ackno, header.win);
+
+    // Send an empty segment to ensure at least one segment is sent.
+    if (_sender.segments_out().empty() && seg.length_in_sequence_space() > 0)
+        _sender.send_empty_segment();
+
+    // Send all the segments to the network.
+    send_segments();
+}
 
 bool TCPConnection::active() const { return {}; }
 
