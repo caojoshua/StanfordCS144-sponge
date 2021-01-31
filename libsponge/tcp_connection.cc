@@ -14,19 +14,20 @@ using namespace std;
 
 // Send all the segments enqueued by the sender
 void TCPConnection::send_segments() {
-    std::queue<TCPSegment> sender_segments_out = _sender.segments_out();
+    std::queue<TCPSegment> &sender_segments_out = _sender.segments_out();
     while (!sender_segments_out.empty()) {
         TCPSegment seg = sender_segments_out.front();
-        TCPHeader header = seg.header();
+        TCPHeader &header = seg.header();
         std::optional<WrappingInt32> ackno = _receiver.ackno();
 
         // If ackno exists, add ackno and window size to the header.
         if (ackno) {
+            header.ack = true;
             header.ackno = ackno.value();
             header.win = _receiver.window_size();
         }
-        sender_segments_out.pop();
         _segments_out.push(seg);
+        sender_segments_out.pop();
     }
 }
 
@@ -45,6 +46,7 @@ void TCPConnection::segment_received(const TCPSegment &seg) {
     if (header.rst) {
         _receiver.stream_out().set_error();
         _sender.stream_in().set_error();
+        _active = false;
         // TODO: kill connection permanently
         return;
     }
@@ -64,7 +66,9 @@ void TCPConnection::segment_received(const TCPSegment &seg) {
     send_segments();
 }
 
-bool TCPConnection::active() const { return {}; }
+bool TCPConnection::active() const {
+    return _active;
+}
 
 size_t TCPConnection::write(const string &data) {
     DUMMY_CODE(data);
@@ -72,11 +76,18 @@ size_t TCPConnection::write(const string &data) {
 }
 
 //! \param[in] ms_since_last_tick number of milliseconds since the last call to this method
-void TCPConnection::tick(const size_t ms_since_last_tick) { DUMMY_CODE(ms_since_last_tick); }
+void TCPConnection::tick(const size_t ms_since_last_tick) {
+    _sender.tick(ms_since_last_tick);
+    // TODO: clean up connection and other steps
+}
 
 void TCPConnection::end_input_stream() {}
 
-void TCPConnection::connect() {}
+void TCPConnection::connect() {
+    // Send segment with SYN flag. Assume SYN flag is already enqueued.
+    send_segments();
+    _active = true;
+}
 
 TCPConnection::~TCPConnection() {
     try {
