@@ -3,6 +3,7 @@
 #include "tcp_config.hh"
 
 #include <random>
+#include <iostream>
 
 // Dummy implementation of a TCP sender
 
@@ -109,6 +110,11 @@ void TCPSender::fill_window() {
 //! \param window_size The remote receiver's advertised window size
 void TCPSender::ack_received(const WrappingInt32 ackno, const uint16_t window_size) {
     uint32_t ackno_val = ackno.raw_value();
+    uint32_t next_seqno_val = next_seqno().raw_value();
+
+    // Return if invalid ackno
+    if (ackno_val > next_seqno_val)
+        return;
 
     // Remove acknowledged outstanding segments.
     auto iter = _outstanding_segments.cbegin();
@@ -121,12 +127,11 @@ void TCPSender::ack_received(const WrappingInt32 ackno, const uint16_t window_si
         _outstanding_segments.erase(temp_iter);
     }
 
-    uint32_t ackno_right = ackno_val + window_size;
-    uint32_t next_seqno_val = next_seqno().raw_value();
-
     // Return if invalid or old ackno
-    if (ackno_val > next_seqno_val || ackno_right <= _highest_ackno)
+    uint32_t ackno_right = ackno_val + window_size;
+    if (ackno_right <= _highest_ackno)
         return;
+
     _highest_ackno = ackno_right;
 
     if (window_size == 0) {
