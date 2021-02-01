@@ -17,6 +17,15 @@ void TCPConnection::connect_sender() {
     _sender.fill_window();
 }
 
+// Shutdown the connection if able to.
+void TCPConnection::check_shutdown() {
+    // We know the outbound stream is fully ack if it is eof and bytes_in_flight(number of non-ack bytes) == 0
+    if (_receiver.stream_out().eof() && _sender.stream_in().eof() && _sender.bytes_in_flight() == 0) {
+        _active = false;
+        _linger_after_streams_finish = false;
+    }
+}
+
 // Send all the segments enqueued by the sender
 void TCPConnection::send_segments() {
     std::queue<TCPSegment> &sender_segments_out = _sender.segments_out();
@@ -38,7 +47,7 @@ void TCPConnection::send_segments() {
 
 size_t TCPConnection::remaining_outbound_capacity() const { return {}; }
 
-size_t TCPConnection::bytes_in_flight() const { return {}; }
+size_t TCPConnection::bytes_in_flight() const { return _sender.bytes_in_flight(); }
 
 size_t TCPConnection::unassembled_bytes() const { return {}; }
 
@@ -78,16 +87,18 @@ void TCPConnection::segment_received(const TCPSegment &seg) {
 
     // Send all the segments to the network.
     send_segments();
+
+    // Shutdown if connection is finished
+    check_shutdown();
 }
 
 bool TCPConnection::active() const { return _active || _linger_after_streams_finish; }
 
 size_t TCPConnection::write(const string &data) {
-    TCPSegment segment;
-    Buffer &buffer = segment.payload();
-    buffer = Buffer(std::string(data));
-    _segments_out.push(segment);
-    return buffer.size();
+    size_t size = _sender.stream_in().write(data);
+    _sender.fill_window();
+    send_segments();
+    return size;
 }
 
 //! \param[in] ms_since_last_tick number of milliseconds since the last call to this method
@@ -110,7 +121,10 @@ TCPConnection::~TCPConnection() {
         if (active()) {
             cerr << "Warning: Unclean shutdown of TCPConnection\n";
 
-            // Your code here: need to send a RST segment to the peer
+            // Send a RST segment to peer
+            TCPSegment seg;
+            seg.header().rst = true;
+            _segments_out.push(seg);
         }
     } catch (const exception &e) {
         std::cerr << "Exception destructing TCP FSM: " << e.what() << std::endl;

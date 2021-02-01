@@ -26,6 +26,7 @@ class TCPConnection {
     void send_segments();
 
     void connect_sender();
+    void check_shutdown();
 
   public:
     //! \name "Input" interface for the writer
