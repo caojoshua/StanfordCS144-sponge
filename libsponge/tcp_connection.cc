@@ -12,6 +12,11 @@ void DUMMY_CODE(Targs &&... /* unused */) {}
 
 using namespace std;
 
+void TCPConnection::connect_sender() {
+    _active = true;
+    _sender.fill_window();
+}
+
 // Send all the segments enqueued by the sender
 void TCPConnection::send_segments() {
     std::queue<TCPSegment> &sender_segments_out = _sender.segments_out();
@@ -42,6 +47,15 @@ size_t TCPConnection::time_since_last_segment_received() const { return {}; }
 void TCPConnection::segment_received(const TCPSegment &seg) {
     TCPHeader header = seg.header();
 
+    if (!_active) {
+        // Activate the connection.
+        if (header.syn)
+            connect_sender();
+        // Abort on receiving segment when connection is not active.
+        else
+            return;
+    }
+
     // If segment has reset flag, kill connection.
     if (header.rst) {
         _receiver.stream_out().set_error();
@@ -66,9 +80,7 @@ void TCPConnection::segment_received(const TCPSegment &seg) {
     send_segments();
 }
 
-bool TCPConnection::active() const {
-    return _active;
-}
+bool TCPConnection::active() const { return _active || _linger_after_streams_finish; }
 
 size_t TCPConnection::write(const string &data) {
     DUMMY_CODE(data);
@@ -78,6 +90,7 @@ size_t TCPConnection::write(const string &data) {
 //! \param[in] ms_since_last_tick number of milliseconds since the last call to this method
 void TCPConnection::tick(const size_t ms_since_last_tick) {
     _sender.tick(ms_since_last_tick);
+    send_segments();
     // TODO: clean up connection and other steps
 }
 
@@ -85,9 +98,8 @@ void TCPConnection::end_input_stream() {}
 
 void TCPConnection::connect() {
     // Fill window with SYN byte and send to network.
-    _sender.fill_window();
+    connect_sender();
     send_segments();
-    _active = true;
 }
 
 TCPConnection::~TCPConnection() {
