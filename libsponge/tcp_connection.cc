@@ -108,7 +108,11 @@ void TCPConnection::tick(const size_t ms_since_last_tick) {
     // TODO: clean up connection and other steps
 }
 
-void TCPConnection::end_input_stream() {}
+void TCPConnection::end_input_stream() {
+    _sender.stream_in().end_input();
+    _sender.fill_window();
+    send_segments();
+}
 
 void TCPConnection::connect() {
     // Fill window with SYN byte and send to network.
