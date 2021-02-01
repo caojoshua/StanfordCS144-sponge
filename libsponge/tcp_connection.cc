@@ -83,8 +83,11 @@ void TCPConnection::segment_received(const TCPSegment &seg) {
 bool TCPConnection::active() const { return _active || _linger_after_streams_finish; }
 
 size_t TCPConnection::write(const string &data) {
-    DUMMY_CODE(data);
-    return {};
+    TCPSegment segment;
+    Buffer &buffer = segment.payload();
+    buffer = Buffer(std::string(data));
+    _segments_out.push(segment);
+    return buffer.size();
 }
 
 //! \param[in] ms_since_last_tick number of milliseconds since the last call to this method
