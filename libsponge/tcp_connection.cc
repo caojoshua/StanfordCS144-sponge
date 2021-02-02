@@ -17,12 +17,22 @@ void TCPConnection::connect_sender() {
     _sender.fill_window();
 }
 
-// Shutdown the connection if able to.
-void TCPConnection::check_shutdown() {
-    // We know the outbound stream is fully ack if it is eof and bytes_in_flight(number of non-ack bytes) == 0
-    if (_receiver.stream_out().eof() && _sender.stream_in().eof() && _sender.bytes_in_flight() == 0) {
-        _active = false;
-        _linger_after_streams_finish = false;
+void TCPConnection::update_sender() {
+    _sender.fill_window();
+    send_segments();
+}
+
+// Update the connection status. Should be called everytime a segment is received.
+void TCPConnection::update_connection_status() {
+    if (_receiver.stream_out().eof()) {
+        // Don't linger the stream if the inbound stream ends before the outbound stream.
+        if (!_sender.stream_in().eof())
+            _linger_after_streams_finish = false;
+
+        // Shutdown connection if both streams reached eof, all outbound bytes are
+        // ack (bytes_in_flight() == 0) and don't linger after streams finish.
+        else if (bytes_in_flight() == 0 && !_linger_after_streams_finish)
+            _active = false;
     }
 }
 
@@ -51,10 +61,11 @@ size_t TCPConnection::bytes_in_flight() const { return _sender.bytes_in_flight()
 
 size_t TCPConnection::unassembled_bytes() const { return {}; }
 
-size_t TCPConnection::time_since_last_segment_received() const { return {}; }
+size_t TCPConnection::time_since_last_segment_received() const { return _time_since_last_segment_received; }
 
 void TCPConnection::segment_received(const TCPSegment &seg) {
     TCPHeader header = seg.header();
+    _time_since_last_segment_received = 0;
 
     if (!_active) {
         // Activate the connection.
@@ -85,33 +96,44 @@ void TCPConnection::segment_received(const TCPSegment &seg) {
     if (_sender.segments_out().empty() && seg.length_in_sequence_space() > 0)
         _sender.send_empty_segment();
 
-    // Send all the segments to the network.
     send_segments();
-
-    // Shutdown if connection is finished
-    check_shutdown();
+    update_connection_status();
 }
 
 bool TCPConnection::active() const { return _active || _linger_after_streams_finish; }
 
 size_t TCPConnection::write(const string &data) {
     size_t size = _sender.stream_in().write(data);
-    _sender.fill_window();
-    send_segments();
+    update_sender();
     return size;
 }
 
 //! \param[in] ms_since_last_tick number of milliseconds since the last call to this method
 void TCPConnection::tick(const size_t ms_since_last_tick) {
+    _time_since_last_segment_received += ms_since_last_tick;
+
     _sender.tick(ms_since_last_tick);
     send_segments();
-    // TODO: clean up connection and other steps
+
+    // Send a RST segment if the connection sent too many consecutive retransmissions.
+    if (_sender.consecutive_retransmissions() > TCPConfig::MAX_RETX_ATTEMPTS) {
+        TCPSegment seg;
+        seg.header().rst = true;
+        _segments_out.push(seg);
+        _active = false;
+    }
+
+    // Abort the stream if the connection is lingering and waiting too long.
+    if (_linger_after_streams_finish && time_since_last_segment_received() >= 10 * _cfg.rt_timeout) {
+        _active = false;
+        _linger_after_streams_finish = false;
+    }
+
 }
 
 void TCPConnection::end_input_stream() {
     _sender.stream_in().end_input();
-    _sender.fill_window();
-    send_segments();
+    update_sender();
 }
 
 void TCPConnection::connect() {

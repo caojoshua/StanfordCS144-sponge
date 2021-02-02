@@ -22,11 +22,13 @@ class TCPConnection {
     bool _linger_after_streams_finish{true};
 
     bool _active{false};
+    size_t _time_since_last_segment_received{0};
 
     void send_segments();
 
     void connect_sender();
-    void check_shutdown();
+    void update_sender();
+    void update_connection_status();
 
   public:
     //! \name "Input" interface for the writer
