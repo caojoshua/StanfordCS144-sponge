@@ -36,6 +36,18 @@ void TCPConnection::update_connection_status() {
     }
 }
 
+void TCPConnection::shutdown() {
+    _active = false;
+    _linger_after_streams_finish = false;
+}
+
+void TCPConnection::send_rst() {
+    TCPSegment seg;
+    seg.header().rst = true;
+    _segments_out.push(seg);
+    shutdown();
+}
+
 // Send all the segments enqueued by the sender
 void TCPConnection::send_segments() {
     std::queue<TCPSegment> &sender_segments_out = _sender.segments_out();
@@ -80,8 +92,7 @@ void TCPConnection::segment_received(const TCPSegment &seg) {
     if (header.rst) {
         _receiver.stream_out().set_error();
         _sender.stream_in().set_error();
-        _active = false;
-        // TODO: kill connection permanently
+        shutdown();
         return;
     }
 
@@ -116,19 +127,14 @@ void TCPConnection::tick(const size_t ms_since_last_tick) {
     send_segments();
 
     // Send a RST segment if the connection sent too many consecutive retransmissions.
-    if (_sender.consecutive_retransmissions() > TCPConfig::MAX_RETX_ATTEMPTS) {
-        TCPSegment seg;
-        seg.header().rst = true;
-        _segments_out.push(seg);
-        _active = false;
-    }
+    if (_sender.consecutive_retransmissions() > TCPConfig::MAX_RETX_ATTEMPTS)
+        send_rst();
 
     // Abort the stream if the connection is lingering and waiting too long.
     if (_linger_after_streams_finish && time_since_last_segment_received() >= 10 * _cfg.rt_timeout) {
         _active = false;
         _linger_after_streams_finish = false;
     }
-
 }
 
 void TCPConnection::end_input_stream() {
@@ -146,11 +152,7 @@ TCPConnection::~TCPConnection() {
     try {
         if (active()) {
             cerr << "Warning: Unclean shutdown of TCPConnection\n";
-
-            // Send a RST segment to peer
-            TCPSegment seg;
-            seg.header().rst = true;
-            _segments_out.push(seg);
+            send_rst();
         }
     } catch (const exception &e) {
         std::cerr << "Exception destructing TCP FSM: " << e.what() << std::endl;
