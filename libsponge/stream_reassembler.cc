@@ -44,12 +44,7 @@ void StreamReassembler::write_to_output(const Byte b) {
 
 // Clean the current state of the Reassembler.
 // 1. Erase bytes that have already been written
-// 2. Strip bytes from end of _unassembled_bytes if over the capacity
-// 3. Flush bytes to output, if possible
-//
-// MUST be done in this order.
-// 1. Must come before 2. to free up _unassembled_bytes capacity
-// 2. Must come before 3. to prevent writing bytes that are over capacity
+// 2. Flush bytes to output, if possible
 void StreamReassembler::clean() {
     if (empty())
         return;
@@ -61,14 +56,6 @@ void StreamReassembler::clean() {
         auto temp_iter = iter;
         ++iter;
         _unassembled_bytes.erase(temp_iter);
-    }
-
-    // Strip bytes if over the capacity
-    int bytes_over_capacity = _output.buffer_size() + unassembled_bytes() - _capacity;
-    assert(unassembled_bytes() > bytes_over_capacity);
-    while (bytes_over_capacity > 0) {
-        _unassembled_bytes.pop_back();
-        --bytes_over_capacity;
     }
 
     // Flush bytes to output, if possible
@@ -87,6 +74,11 @@ void StreamReassembler::push_unassembled_bytes(const std::string &data, const ui
     auto end = _unassembled_bytes.end();
     size_t data_index = index;
     size_t data_end = data_index + data.size();
+
+    // Don't write bytes that would extend beyond the capacity.
+    size_t right_bound = _index + _capacity - _output.buffer_size();
+    if (data_end > right_bound)
+        data_end = right_bound;
 
     // Insert bytes into _unassembled_bytes list sorted
     while (data_index < data_end) {
@@ -122,6 +114,7 @@ void StreamReassembler::push_substring(const string &data, const size_t index, c
     if (eof)
         set_eof(last_index);
 
+    // Ignore segments that are entirely outside of window or empty.
     if (last_index < _index || size == 0)
         return;
 
