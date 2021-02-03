@@ -46,11 +46,17 @@ void TCPConnection::shutdown() {
     _linger_after_streams_finish = false;
 }
 
+void TCPConnection::streams_set_err() {
+    _receiver.stream_out().set_error();
+    _sender.stream_in().set_error();
+}
+
 void TCPConnection::send_rst() {
     TCPSegment seg;
     seg.header().rst = true;
     _segments_out.push(seg);
     shutdown();
+    streams_set_err();
 }
 
 // Send all the segments enqueued by the sender
@@ -95,9 +101,8 @@ void TCPConnection::segment_received(const TCPSegment &seg) {
 
     // If segment has reset flag, kill connection.
     if (header.rst) {
-        _receiver.stream_out().set_error();
-        _sender.stream_in().set_error();
         shutdown();
+        streams_set_err();
         return;
     }
 
@@ -128,12 +133,17 @@ size_t TCPConnection::write(const string &data) {
 void TCPConnection::tick(const size_t ms_since_last_tick) {
     _time_since_last_segment_received += ms_since_last_tick;
 
+    // Send the time update to the sender and send the segments over the network.
     _sender.tick(ms_since_last_tick);
     send_segments();
 
     // Send a RST segment if the connection sent too many consecutive retransmissions.
-    if (_sender.consecutive_retransmissions() > TCPConfig::MAX_RETX_ATTEMPTS)
+    if (_sender.consecutive_retransmissions() > TCPConfig::MAX_RETX_ATTEMPTS) {
+        // Empty the segments queue to remove the recent retransmitted segment.
+        while (!_segments_out.empty())
+            _segments_out.pop();
         send_rst();
+    }
 
     // Abort the stream if the connection is lingering and waiting too long.
     if (_lingering && _linger_after_streams_finish && time_since_last_segment_received() >= 10 * _cfg.rt_timeout) {

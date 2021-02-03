@@ -30,6 +30,7 @@ class TCPConnection {
     void update_sender();
     void update_connection_status();
     void shutdown();
+    void streams_set_err();
     void send_rst();
 
   public:
