@@ -160,7 +160,7 @@ void TCPSender::tick(const size_t ms_since_last_tick) {
 
     _retransmission_timer += ms_since_last_tick;
 
-    if (_retransmission_timer >= _retransmission_timeout) {
+    if (_retransmission_timer >= _retransmission_timeout && !_outstanding_segments.empty()) {
         // Send an oustanding segment
         TCPSegment segment = _outstanding_segments.front();
         _outstanding_segments.pop_front();
