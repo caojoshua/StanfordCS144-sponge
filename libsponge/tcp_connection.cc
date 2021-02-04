@@ -29,15 +29,10 @@ void TCPConnection::update_connection_status() {
         if (!_sender.stream_in().eof())
             _linger_after_streams_finish = false;
 
-        // If both streams reached eof and all outbound bytes ar ack (bytes_in_flight() == 0)
-        // Linger if should linger after streams finish
-        // Shutdown otherwise.
-        else if (bytes_in_flight() == 0) {
-            if (_linger_after_streams_finish)
-                _lingering = true;
-            else
-                shutdown();
-        }
+        // Shutdown if both streams reached eof, all outbound bytes are ack (bytes_in_flight() == 0),
+        // and shouldn't linger.
+        else if (bytes_in_flight() == 0 && !_linger_after_streams_finish)
+            shutdown();
     }
 }
 
@@ -146,10 +141,9 @@ void TCPConnection::tick(const size_t ms_since_last_tick) {
     }
 
     // Abort the stream if the connection is lingering and waiting too long.
-    if (_lingering && _linger_after_streams_finish && time_since_last_segment_received() >= 10 * _cfg.rt_timeout) {
-        _active = false;
-        _linger_after_streams_finish = false;
-    }
+    if (_receiver.stream_out().eof() && _sender.stream_in().eof() && _sender.bytes_in_flight() == 0 &&
+        time_since_last_segment_received() >= 10 * _cfg.rt_timeout)
+        shutdown();
 }
 
 void TCPConnection::end_input_stream() {

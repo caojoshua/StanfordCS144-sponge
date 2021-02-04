@@ -23,7 +23,6 @@ class TCPConnection {
 
     bool _active{false};
     size_t _time_since_last_segment_received{0};
-    bool _lingering{false};
 
     void send_segments();
     void connect_sender();
