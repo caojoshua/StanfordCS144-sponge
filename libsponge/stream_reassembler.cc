@@ -154,12 +154,16 @@ void StreamReassembler::push_unassembled_bytes(const std::string &data, const ui
 
         // Attempt to coalesce
         else if (coalesce(b, *iter, res)) {
-            // Attempt to colaesce with the next substring. This can happen if a substring
-            // completey fills the hole in between existing substrings.
+            // Attempt to colaesce with the next substrings. This can happen if the new substring
+            // completey fills the hole in between substrings or is the superset of many
+            // substrings.
             auto next = iter;
             ++next;
-            if (next != end && coalesce(res, *next, res))
-                _unassembled_bytes.erase(next);
+            while (next != end && coalesce(res, *next, res)) {
+                auto temp = next;
+                ++next;
+                _unassembled_bytes.erase(temp);
+            }
 
             *iter = res;
             return;
