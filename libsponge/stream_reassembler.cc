@@ -190,6 +190,11 @@ void StreamReassembler::push_substring(const string &data, const size_t index, c
     clean();
 }
 
-size_t StreamReassembler::unassembled_bytes() const { return _unassembled_bytes.size(); }
+size_t StreamReassembler::unassembled_bytes() const {
+    size_t s = 0;
+    for (ByteString b : _unassembled_bytes)
+        s += b.str.size();
+    return s;
+}
 
 bool StreamReassembler::empty() const { return _unassembled_bytes.empty(); }
