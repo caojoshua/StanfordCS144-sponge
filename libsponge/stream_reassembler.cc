@@ -56,14 +56,14 @@ bool StreamReassembler::coalesce(const ByteString a, const ByteString b, ByteStr
     // a is left of b
     else if (a.index < b.index && a_index_right >= b.index) {
         res.index = a.index;
-        res.str = a.str + b.str.substr(b_index_right - a_index_right, string::npos);
+        res.str = a.str + b.str.substr(a_index_right - b.index, string::npos);
         return true;
     }
 
     // b is left of a
     else if (b.index < a.index && b_index_right >= a.index) {
         res.index = b.index;
-        res.str = b.str + a.str.substr(a_index_right - b_index_right, string::npos);
+        res.str = b.str + a.str.substr(b_index_right - a.index, string::npos);
         return true;
     }
 
@@ -155,7 +155,7 @@ void StreamReassembler::push_unassembled_bytes(const std::string &data, const ui
         // Attempt to coalesce
         else if (coalesce(b, *iter, res)) {
             // Attempt to colaesce with the next substring. This can happen if a substring
-            // complete fills the hole in between existing substrings.
+            // completey fills the hole in between existing substrings.
             auto next = iter;
             ++next;
             if (next != end && coalesce(res, *next, res))
