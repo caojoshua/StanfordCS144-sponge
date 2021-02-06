@@ -24,9 +24,9 @@ void TCPConnection::update_sender() {
 
 // Update the connection status. Should be called everytime a segment is received.
 void TCPConnection::update_connection_status() {
-    if (_receiver.stream_out().eof()) {
+    if (_receiver.stream_out().input_ended()) {
         // Don't linger the stream if the inbound stream ends before the outbound stream.
-        if (!_sender.stream_in().eof())
+        if (!_sender.stream_in().input_ended())
             _linger_after_streams_finish = false;
 
         // Shutdown if both streams reached eof, all outbound bytes are ack (bytes_in_flight() == 0),
@@ -141,7 +141,7 @@ void TCPConnection::tick(const size_t ms_since_last_tick) {
     }
 
     // Abort the stream if the connection is lingering and waiting too long.
-    if (_receiver.stream_out().eof() && _sender.stream_in().eof() && _sender.bytes_in_flight() == 0 &&
+    if (_receiver.stream_out().input_ended() && _sender.stream_in().input_ended() && _sender.bytes_in_flight() == 0 &&
         time_since_last_segment_received() >= 10 * _cfg.rt_timeout)
         shutdown();
 }
