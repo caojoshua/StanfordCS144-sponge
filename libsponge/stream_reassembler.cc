@@ -1,6 +1,8 @@
 #include "stream_reassembler.hh"
 
 #include <cassert>
+#include <chrono>
+#include <iostream>
 #include <limits>
 
 #define MAX_EOF std::numeric_limits<size_t>::max()
@@ -15,9 +17,59 @@
 template <typename... Targs>
 void DUMMY_CODE(Targs &&... /* unused */) {}
 
+/* static uint64_t _time = 0; */
+/* static uint64_t _output_count = 0; */
+/* auto end = std::chrono::high_resolution_clock::now(); */
+/* auto duration = std::chrono::duration_cast<std::chrono::nanoseconds>(end - start); */
+
+/* _time += duration.count(); */
+/* if (_output_count % 10000000 == 0) */
+/*     std::cerr << _output_count << " time: " << _time << "\n"; */
+/* ++_output_count; */
+
 using namespace std;
 
-size_t StreamReassembler::remaining_capacity() { return _capacity - unassembled_bytes() - _output.buffer_size(); }
+StreamReassembler::ByteString &StreamReassembler::ByteString::operator=(const ByteString &other) {
+    this->index = other.index;
+    this->str = std::string(other.str);
+    return *this;
+}
+
+// Coalesces ByteStrings a and b if their indices overlap. Returns true if able to coalesce and
+// stores the resulting ByteString in res. Return false if unable to colesce and does not alter res.
+bool StreamReassembler::coalesce(const ByteString a, const ByteString b, ByteString &res) {
+    size_t a_index_right = a.index + a.str.size();
+    size_t b_index_right = b.index + b.str.size();
+
+    // a is superset of b
+    if (a.index <= b.index && a_index_right >= b_index_right) {
+        res = a;
+        return true;
+    }
+
+    // b is superset of a
+    else if (b.index <= a.index && b_index_right >= a_index_right) {
+        res = b;
+        return true;
+    }
+
+    // a is left of b
+    else if (a.index < b.index && a_index_right >= b.index) {
+        res.index = a.index;
+        res.str = a.str + b.str.substr(b_index_right - a_index_right, string::npos);
+        return true;
+    }
+
+    // b is left of a
+    else if (b.index < a.index && b_index_right >= a.index) {
+        res.index = b.index;
+        res.str = b.str + a.str.substr(a_index_right - b_index_right, string::npos);
+        return true;
+    }
+
+    // can't coalesce
+    return false;
+}
 
 void StreamReassembler::set_eof(const size_t eof) {
     _eof = eof;
@@ -35,17 +87,18 @@ void StreamReassembler::set_eof(const size_t eof) {
     }
 }
 
-void StreamReassembler::write_to_output(const Byte b) {
-    _output.write(std::string(1, b.val));
-    if (b.index + 1 == _eof && _eof_set)
+void StreamReassembler::write_to_output(const ByteString b) {
+    size_t bytes_written = _output.write(b.str);
+    _index += bytes_written;
+    if (_index == _eof && _eof_set)
         _output.end_input();
-    ++_index;
 }
 
 // Clean the current state of the Reassembler.
 // 1. Erase bytes that have already been written
 // 2. Flush bytes to output, if possible
 void StreamReassembler::clean() {
+    // TODO: probably don't need to do a lot of things here
     if (empty())
         return;
 
@@ -72,33 +125,48 @@ void StreamReassembler::clean() {
 void StreamReassembler::push_unassembled_bytes(const std::string &data, const uint64_t index) {
     auto iter = _unassembled_bytes.begin();
     auto end = _unassembled_bytes.end();
-    size_t data_index = index;
-    size_t data_end = data_index + data.size();
+    ByteString b{index, data};
 
-    // Don't write bytes that would extend beyond the capacity.
-    size_t right_bound = _index + _capacity - _output.buffer_size();
-    if (data_end > right_bound)
-        data_end = right_bound;
+    if (index < _index) {
+        size_t begin_index = _index - index;
+        // Don't write to indices before the lastest written index.
+        if (begin_index < data.size()) {
+            b.str = b.str.substr(begin_index, string::npos);
+            b.index += begin_index;
+        }
+        // No new indices to be written
+        else
+            return;
+    }
+
+    // Don't write bytes that would extend beyond capacity.
+    size_t right_bound = _index + _capacity - _output.buffer_size() - b.index;
+    b.str = b.str.substr(0, right_bound);
 
     // Insert bytes into _unassembled_bytes list sorted
-    while (data_index < data_end) {
-        // Append the byte or insert in sorted order
-        if (iter == end || data_index < iter->index) {
-            Byte b;
-            b.index = data_index;
-            b.val = data[data_index - index];
+    size_t b_index_right = b.index + b.str.size();
+    while (iter != end) {
+        ByteString res;
+        if (b_index_right < iter->index) {
             _unassembled_bytes.insert(iter, b);
-            ++data_index;
+            return;
         }
 
-        // Ignore the byte if it already exists
-        else if (data_index == iter->index)
-            ++data_index;
+        // Attempt to coalesce
+        else if (coalesce(b, *iter, res)) {
+            // Attempt to colaesce with the next substring. This can happen if a substring
+            // complete fills the hole in between existing substrings.
+            auto next = iter;
+            ++next;
+            if (next != end && coalesce(res, *next, res))
+                _unassembled_bytes.erase(next);
 
-        // Otherwise advance through _unassembled_bytes
-        else
-            ++iter;
+            *iter = res;
+            return;
+        }
+        ++iter;
     }
+    _unassembled_bytes.push_back(b);
 }
 
 StreamReassembler::StreamReassembler(const size_t capacity)

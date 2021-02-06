@@ -13,9 +13,10 @@ class StreamReassembler {
   private:
     // Your code here -- add private members as necessary.
 
-    struct Byte {
-        size_t index;
-        char val;
+    struct ByteString {
+        ByteString &operator=(const ByteString &other);
+        size_t index{};
+        std::string str{};
     };
 
     ByteStream _output;  //!< The reassembled in-order byte stream
@@ -23,11 +24,11 @@ class StreamReassembler {
     size_t _index;
     size_t _eof;  //!< The index after the last index
     bool _eof_set;
-    std::list<Byte> _unassembled_bytes{};
+    std::list<ByteString> _unassembled_bytes{};
 
-    size_t remaining_capacity();
+    bool coalesce(const ByteString a, const ByteString b, ByteString &res);
     void set_eof(const size_t eof);
-    void write_to_output(const Byte b);
+    void write_to_output(const ByteString b);
     void clean();
     void push_unassembled_bytes(const std::string &data, const uint64_t index);
 
