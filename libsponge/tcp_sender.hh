@@ -47,8 +47,9 @@ class TCPSender {
     //! number of consecutive retransmissions to determine if a connection is hopeless
     uint32_t _consecutive_retransmissions{};
 
-    //! highest acknowledged number
+    //! highest acknowledged number left and right bounds
     int64_t _highest_ackno{-1};
+    int64_t _highest_ackno_right{-1};
 
     //! if FIN byte has been sent
     bool _fin_sent{false};
