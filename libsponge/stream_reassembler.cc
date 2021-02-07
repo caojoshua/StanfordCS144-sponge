@@ -56,14 +56,16 @@ bool StreamReassembler::coalesce(const ByteString a, const ByteString b, ByteStr
     // a is left of b
     else if (a.index < b.index && a_index_right >= b.index) {
         res.index = a.index;
-        res.str = a.str + b.str.substr(a_index_right - b.index, string::npos);
+        res.str = a.str;
+        res.str.append(b.str, a_index_right - b.index, string::npos);
         return true;
     }
 
     // b is left of a
     else if (b.index < a.index && b_index_right >= a.index) {
         res.index = b.index;
-        res.str = b.str + a.str.substr(b_index_right - a.index, string::npos);
+        res.str = b.str;
+        res.str.append(a.str, b_index_right - a.index, string::npos);
         return true;
     }
 
