@@ -94,31 +94,15 @@ void StreamReassembler::write_to_output(const ByteString b) {
         _output.end_input();
 }
 
-// Clean the current state of the Reassembler.
-// 1. Erase bytes that have already been written
-// 2. Flush bytes to output, if possible
-void StreamReassembler::clean() {
-    // TODO: probably don't need to do a lot of things here
+// Flush unassembled bytes to output, if possible.
+void StreamReassembler::flush_to_output() {
     if (empty())
         return;
 
-    // Strip written bytes
-    auto iter = _unassembled_bytes.begin();
-    auto end = _unassembled_bytes.end();
-    while (iter != end && iter->index < _index) {
-        auto temp_iter = iter;
-        ++iter;
-        _unassembled_bytes.erase(temp_iter);
-    }
-
-    // Flush bytes to output, if possible
-    iter = _unassembled_bytes.begin();
-    end = _unassembled_bytes.end();
-    while (iter != end && iter->index == _index) {
-        write_to_output(*iter);
-        auto temp_iter = iter;
-        ++iter;
-        _unassembled_bytes.erase(temp_iter);
+    ByteString b = _unassembled_bytes.front();
+    if (b.index == _index) {
+        write_to_output(b);
+        _unassembled_bytes.pop_front();
     }
 }
 
@@ -191,7 +175,7 @@ void StreamReassembler::push_substring(const string &data, const size_t index, c
         return;
 
     push_unassembled_bytes(data, index);
-    clean();
+    flush_to_output();
 }
 
 size_t StreamReassembler::unassembled_bytes() const {

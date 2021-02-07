@@ -29,7 +29,7 @@ class StreamReassembler {
     bool coalesce(const ByteString a, const ByteString b, ByteString &res);
     void set_eof(const size_t eof);
     void write_to_output(const ByteString b);
-    void clean();
+    void flush_to_output();
     void push_unassembled_bytes(const std::string &data, const uint64_t index);
 
   public:
