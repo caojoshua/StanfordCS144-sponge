@@ -1,8 +1,6 @@
 #include "stream_reassembler.hh"
 
 #include <cassert>
-#include <chrono>
-#include <iostream>
 #include <limits>
 
 #define MAX_EOF std::numeric_limits<size_t>::max()
@@ -16,16 +14,6 @@
 
 template <typename... Targs>
 void DUMMY_CODE(Targs &&... /* unused */) {}
-
-/* static uint64_t _time = 0; */
-/* static uint64_t _output_count = 0; */
-/* auto end = std::chrono::high_resolution_clock::now(); */
-/* auto duration = std::chrono::duration_cast<std::chrono::nanoseconds>(end - start); */
-
-/* _time += duration.count(); */
-/* if (_output_count % 10000000 == 0) */
-/*     std::cerr << _output_count << " time: " << _time << "\n"; */
-/* ++_output_count; */
 
 using namespace std;
 
