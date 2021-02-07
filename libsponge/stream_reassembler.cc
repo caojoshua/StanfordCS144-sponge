@@ -187,7 +187,7 @@ void StreamReassembler::push_substring(const string &data, const size_t index, c
         set_eof(last_index);
 
     // Ignore segments that are entirely outside of window or empty.
-    if (last_index < _index || size == 0)
+    if (last_index <= _index || index > _index + _capacity || size == 0)
         return;
 
     push_unassembled_bytes(data, index);
