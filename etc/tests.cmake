@@ -219,7 +219,7 @@ add_custom_target (check_lab2 COMMAND ${CMAKE_CTEST_COMMAND} --output-on-failure
 add_custom_target (check_lab3 COMMAND ${CMAKE_CTEST_COMMAND} --output-on-failure --timeout 10 -R 't_send_|t_recv_|t_wrapping_|t_strm_reassem_|t_byte_stream|_dt'
                               COMMENT "Testing the TCP sender...")
 add_custom_target (check_lab4 COMMAND "${PROJECT_SOURCE_DIR}/tun.sh" check 144 145
-                              COMMAND ${CMAKE_CTEST_COMMAND} --output-on-failure --timeout 10 -R "^t_"
+                              COMMAND ${CMAKE_CTEST_COMMAND} --output-on-failure --timeout 20 -R "^t_"
                               COMMENT "Testing the TCP connection...")
 add_custom_target (check_lab5 COMMAND "${PROJECT_SOURCE_DIR}/tap.sh" check 10
                               COMMAND ${CMAKE_CTEST_COMMAND} --output-on-failure --timeout 10 -R '^t_webget|^arp_'
