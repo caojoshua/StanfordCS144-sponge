@@ -13,10 +13,8 @@ void DUMMY_CODE(Targs &&... /* unused */) {}
 using namespace std;
 
 void TCPConnection::connect_sender() {
-    if (!_active) {
-        _active = true;
-        update_sender();
-    }
+    _active = true;
+    _sender.fill_window();
 }
 
 void TCPConnection::update_sender() {
@@ -89,10 +87,8 @@ void TCPConnection::segment_received(const TCPSegment &seg) {
 
     if (!_active) {
         // Activate the connection.
-        if (header.syn) {
-          _active = true;
-          _sender.fill_window();
-        }
+        if (header.syn)
+            connect_sender();
         // Abort on receiving segment when connection is not active.
         else
             return;
