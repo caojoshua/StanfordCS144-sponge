@@ -68,8 +68,8 @@ void NetworkInterface::send_datagram(const InternetDatagram &dgram, const Addres
     const uint32_t next_hop_ip = next_hop.ipv4_numeric();
 
     // If the Network Interface knows the ethernet address, send the datagram.
-    auto iter = _ip_to_ethernet.find(next_hop_ip);
-    if (iter != _ip_to_ethernet.cend())
+    auto iter = _cached_ethernet_addresses.find(next_hop_ip);
+    if (iter != _cached_ethernet_addresses.cend())
         send_datagram(dgram, iter->second.address);
 
     // If the Network Interface does not know the ethernet address and an arp message for this ip address has not been
@@ -100,7 +100,7 @@ optional<InternetDatagram> NetworkInterface::recv_frame(const EthernetFrame &fra
             return {};
 
         // Learn the ip to ethernet mapping.
-        _ip_to_ethernet[arp.sender_ip_address].address = arp.sender_ethernet_address;
+        _cached_ethernet_addresses[arp.sender_ip_address].address = arp.sender_ethernet_address;
 
         // Send queued up ethernet frames that are mapped to the new ethernet address.
         auto find = _datagram_queue.find(arp.sender_ip_address);
@@ -128,14 +128,27 @@ optional<InternetDatagram> NetworkInterface::recv_frame(const EthernetFrame &fra
 //! \param[in] ms_since_last_tick the number of milliseconds since the last call to this method
 void NetworkInterface::tick(const size_t ms_since_last_tick) {
     // Update ARP message timers.
-    auto iter = _arp_message_timers.begin();
-    auto end = _arp_message_timers.end();
-    while (iter != end) {
-        iter->second += ms_since_last_tick;
-        auto temp = iter;
-        ++iter;
+    auto arp_message_iter = _arp_message_timers.begin();
+    auto arp_message_end = _arp_message_timers.end();
+    while (arp_message_iter != arp_message_end) {
+        arp_message_iter->second += ms_since_last_tick;
+        auto temp = arp_message_iter;
+        ++arp_message_iter;
         // Remove timers for arp messages that can be resent.
         if (temp->second > RESEND_ARP_MESSAGE_TIME)
             _arp_message_timers.erase(temp);
     }
+
+    // Update ip to ethernet address timers.
+    auto cached_ethernet_iter = _cached_ethernet_addresses.begin();
+    auto cached_ethernet_end = _cached_ethernet_addresses.end();
+    while (cached_ethernet_iter != cached_ethernet_end) {
+        cached_ethernet_iter->second.cache_time += ms_since_last_tick;
+        auto temp = cached_ethernet_iter;
+        ++cached_ethernet_iter;
+        // Remove timers for cached ethernet addresses that have exceeded the max cache time.
+        if (temp->second.cache_time > MAX_ETHERNET_CACHE_TIME)
+            _cached_ethernet_addresses.erase(temp);
+    }
+
 }

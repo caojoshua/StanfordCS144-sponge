@@ -38,7 +38,7 @@ class NetworkInterface {
     static constexpr uint16_t RESEND_ARP_MESSAGE_TIME = 5000;
 
     // Time before removing a cached ethernet address.
-    static constexpr uint16_t ETHERNET_CACHE_TIME = 30000;
+    static constexpr uint16_t MAX_ETHERNET_CACHE_TIME = 30000;
 
     // Struct to keep track of cached ethernet addresses.
     struct CachedEthernetAddress {
@@ -56,8 +56,8 @@ class NetworkInterface {
     //! outbound queue of Ethernet frames that the NetworkInterface wants sent
     std::queue<EthernetFrame> _frames_out{};
 
-    // Mapping from IP Addresses to Ethernet Addresses
-    std::unordered_map<uint32_t, CachedEthernetAddress> _ip_to_ethernet{};
+    // Mapping from IP Addresses to cached Ethernet Addresses
+    std::unordered_map<uint32_t, CachedEthernetAddress> _cached_ethernet_addresses{};
 
     // Mapping of ip addresses to a list of datagrams to be sent after retreiving their ethernet addresses.
     std::unordered_map<uint32_t, std::list<InternetDatagram>> _datagram_queue{};
