@@ -1,6 +1,7 @@
 #ifndef SPONGE_LIBSPONGE_NETWORK_INTERFACE_HH
 #define SPONGE_LIBSPONGE_NETWORK_INTERFACE_HH
 
+#include "arp_message.hh"
 #include "ethernet_frame.hh"
 #include "tcp_over_ip.hh"
 #include "tun.hh"
@@ -33,7 +34,6 @@
 //! and learns or replies as necessary.
 class NetworkInterface {
   private:
-
     struct CachedEthernetAddress {
         static constexpr uint16_t INITIAL_CACHE_TIME = 30000;
         EthernetAddress address{};
@@ -57,6 +57,10 @@ class NetworkInterface {
     std::unordered_map<uint32_t, std::list<InternetDatagram>> _datagram_queue{};
 
     void send_datagram(const InternetDatagram &dgram, const EthernetAddress &address);
+    ARPMessage construct_arp_message(uint16_t opcode,
+                                     const EthernetAddress &target_ethernet_address,
+                                     uint32_t target_ip_address);
+    void send_arp_message(const ARPMessage &arp, const EthernetAddress &address);
 
   public:
     //! \brief Construct a network interface with given Ethernet (network-access-layer) and IP (internet-layer) addresses

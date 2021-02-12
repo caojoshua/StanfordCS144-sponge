@@ -1,6 +1,5 @@
 #include "network_interface.hh"
 
-#include "arp_message.hh"
 #include "ethernet_frame.hh"
 
 #include <iostream>
@@ -29,6 +28,30 @@ void NetworkInterface::send_datagram(const InternetDatagram &dgram, const Ethern
     _frames_out.push(frame);
 }
 
+// Constructs an arp message with the network interface sender addresses and supplied opcode and target addresses.
+ARPMessage NetworkInterface::construct_arp_message(uint16_t opcode,
+                                                   const EthernetAddress &target_ethernet_address,
+                                                   uint32_t target_ip_address) {
+    ARPMessage arp;
+    arp.opcode = opcode;
+    arp.sender_ethernet_address = _ethernet_address;
+    arp.sender_ip_address = _ip_address_raw;
+    arp.target_ethernet_address = target_ethernet_address;
+    arp.target_ip_address = target_ip_address;
+    return arp;
+}
+
+// Sends arp to address.
+void NetworkInterface::send_arp_message(const ARPMessage &arp, const EthernetAddress &address) {
+    EthernetFrame frame;
+    frame.payload() = arp.serialize();
+    EthernetHeader &header = frame.header();
+    header.dst = address;
+    header.src = _ethernet_address;
+    header.type = EthernetHeader::TYPE_ARP;
+    _frames_out.push(frame);
+}
+
 //! \param[in] ethernet_address Ethernet (what ARP calls "hardware") address of the interface
 //! \param[in] ip_address IP (what ARP calls "protocol") address of the interface
 NetworkInterface::NetworkInterface(const EthernetAddress &ethernet_address, const Address &ip_address)
@@ -48,34 +71,22 @@ void NetworkInterface::send_datagram(const InternetDatagram &dgram, const Addres
     auto iter = _ip_to_ethernet.find(next_hop_ip);
 
     if (iter == _ip_to_ethernet.cend()) {
-        ARPMessage arp;
-        arp.opcode = ARPMessage::OPCODE_REQUEST;
-        arp.sender_ethernet_address = _ethernet_address;
-        arp.sender_ip_address = _ip_address_raw;
-        arp.target_ip_address = next_hop_ip;
-
-        frame.payload() = arp.serialize();
-        EthernetHeader &header = frame.header();
-        header.dst = ETHERNET_BROADCAST;
-        header.src = _ethernet_address;
-        header.type = EthernetHeader::TYPE_ARP;
-
-        _frames_out.push(frame);
+        ARPMessage arp = construct_arp_message(ARPMessage::OPCODE_REQUEST, {}, next_hop_ip);
+        send_arp_message(arp, ETHERNET_BROADCAST);
         _datagram_queue[next_hop_ip].push_back(dgram);
-    } else {
+    } else
         send_datagram(dgram, iter->second.address);
-    }
 }
 
 //! \param[in] frame the incoming Ethernet frame
 optional<InternetDatagram> NetworkInterface::recv_frame(const EthernetFrame &frame) {
     EthernetHeader header = frame.header();
-    if (header.dst != _ethernet_address && header.dst != ETHERNET_BROADCAST)
-        return {};
+    /* if (header.dst != _ethernet_address && header.dst != ETHERNET_BROADCAST) */
+    /*     return {}; */
 
     if (header.type == EthernetHeader::TYPE_IPv4) {
         IPv4Datagram datagram;
-        if (datagram.parse(frame.payload()) == ParseResult::NoError)
+        if (header.dst == _ethernet_address && datagram.parse(frame.payload()) == ParseResult::NoError)
             return datagram;
     }
 
@@ -84,8 +95,10 @@ optional<InternetDatagram> NetworkInterface::recv_frame(const EthernetFrame &fra
         if (arp.parse(frame.payload()) != ParseResult::NoError)
             return {};
 
+        // Learn the ip to ethernet mapping.
         _ip_to_ethernet[arp.sender_ip_address].address = arp.sender_ethernet_address;
 
+        // Send queued up ethernet frames that are mapped to the new ethernet address.
         auto find = _datagram_queue.find(arp.sender_ip_address);
         if (find != _datagram_queue.cend()) {
             std::list<InternetDatagram> dgrams = _datagram_queue[arp.sender_ip_address];
@@ -94,6 +107,14 @@ optional<InternetDatagram> NetworkInterface::recv_frame(const EthernetFrame &fra
                 dgrams.pop_front();
             }
             _datagram_queue.erase(find);
+        }
+
+        // Send the network interface ethernet address if the arp message is asking for it.
+        if (header.dst == ETHERNET_BROADCAST && arp.opcode == ARPMessage::OPCODE_REQUEST &&
+            arp.target_ip_address == _ip_address_raw) {
+            ARPMessage reply =
+                construct_arp_message(ARPMessage::OPCODE_REPLY, arp.sender_ethernet_address, arp.sender_ip_address);
+            send_arp_message(reply, arp.sender_ethernet_address);
         }
     }
 
