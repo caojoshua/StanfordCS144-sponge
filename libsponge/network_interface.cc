@@ -67,15 +67,19 @@ void NetworkInterface::send_datagram(const InternetDatagram &dgram, const Addres
     // convert IP address of next hop to raw 32-bit representation (used in ARP header)
     const uint32_t next_hop_ip = next_hop.ipv4_numeric();
 
-    EthernetFrame frame;
+    // If the Network Interface knows the ethernet address, send the datagram.
     auto iter = _ip_to_ethernet.find(next_hop_ip);
+    if (iter != _ip_to_ethernet.cend())
+        send_datagram(dgram, iter->second.address);
 
-    if (iter == _ip_to_ethernet.cend()) {
+    // If the Network Interface does not know the ethernet address and an arp message for this ip address has not been
+    // sent recently, send an arp message requesting for the ip address.
+    else if (_arp_message_timers.find(next_hop_ip) == _arp_message_timers.cend()) {
         ARPMessage arp = construct_arp_message(ARPMessage::OPCODE_REQUEST, {}, next_hop_ip);
         send_arp_message(arp, ETHERNET_BROADCAST);
         _datagram_queue[next_hop_ip].push_back(dgram);
-    } else
-        send_datagram(dgram, iter->second.address);
+        _arp_message_timers[next_hop_ip] = 0;
+    }
 }
 
 //! \param[in] frame the incoming Ethernet frame
@@ -122,4 +126,16 @@ optional<InternetDatagram> NetworkInterface::recv_frame(const EthernetFrame &fra
 }
 
 //! \param[in] ms_since_last_tick the number of milliseconds since the last call to this method
-void NetworkInterface::tick(const size_t ms_since_last_tick) { DUMMY_CODE(ms_since_last_tick); }
+void NetworkInterface::tick(const size_t ms_since_last_tick) {
+    // Update ARP message timers.
+    auto iter = _arp_message_timers.begin();
+    auto end = _arp_message_timers.end();
+    while (iter != end) {
+        iter->second += ms_since_last_tick;
+        auto temp = iter;
+        ++iter;
+        // Remove timers for arp messages that can be resent.
+        if (temp->second > RESEND_ARP_MESSAGE_TIME)
+            _arp_message_timers.erase(temp);
+    }
+}

@@ -34,10 +34,16 @@
 //! and learns or replies as necessary.
 class NetworkInterface {
   private:
+    // Time before resending an arp message.
+    static constexpr uint16_t RESEND_ARP_MESSAGE_TIME = 5000;
+
+    // Time before removing a cached ethernet address.
+    static constexpr uint16_t ETHERNET_CACHE_TIME = 30000;
+
+    // Struct to keep track of cached ethernet addresses.
     struct CachedEthernetAddress {
-        static constexpr uint16_t INITIAL_CACHE_TIME = 30000;
         EthernetAddress address{};
-        uint16_t cache_time{INITIAL_CACHE_TIME};
+        uint16_t cache_time{};
     };
 
     //! Ethernet (known as hardware, network-access-layer, or link-layer) address of the interface
@@ -53,8 +59,11 @@ class NetworkInterface {
     // Mapping from IP Addresses to Ethernet Addresses
     std::unordered_map<uint32_t, CachedEthernetAddress> _ip_to_ethernet{};
 
-    // Queue of datagrams to be sent after retreiving their ethernet addresses.
+    // Mapping of ip addresses to a list of datagrams to be sent after retreiving their ethernet addresses.
     std::unordered_map<uint32_t, std::list<InternetDatagram>> _datagram_queue{};
+
+    // Mapping of target ip addresses and how long since an ARPMessage for that address has been sent.
+    std::unordered_map<uint32_t, uint16_t> _arp_message_timers{};
 
     void send_datagram(const InternetDatagram &dgram, const EthernetAddress &address);
     ARPMessage construct_arp_message(uint16_t opcode,
