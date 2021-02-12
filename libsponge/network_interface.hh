@@ -5,8 +5,10 @@
 #include "tcp_over_ip.hh"
 #include "tun.hh"
 
+#include <list>
 #include <optional>
 #include <queue>
+#include <unordered_map>
 
 //! \brief A "network interface" that connects IP (the internet layer, or network layer)
 //! with Ethernet (the network access layer, or link layer).
@@ -31,14 +33,30 @@
 //! and learns or replies as necessary.
 class NetworkInterface {
   private:
+
+    struct CachedEthernetAddress {
+        static constexpr uint16_t INITIAL_CACHE_TIME = 30000;
+        EthernetAddress address{};
+        uint16_t cache_time{INITIAL_CACHE_TIME};
+    };
+
     //! Ethernet (known as hardware, network-access-layer, or link-layer) address of the interface
     EthernetAddress _ethernet_address;
 
     //! IP (known as internet-layer or network-layer) address of the interface
     Address _ip_address;
+    uint32_t _ip_address_raw;
 
     //! outbound queue of Ethernet frames that the NetworkInterface wants sent
     std::queue<EthernetFrame> _frames_out{};
+
+    // Mapping from IP Addresses to Ethernet Addresses
+    std::unordered_map<uint32_t, CachedEthernetAddress> _ip_to_ethernet{};
+
+    // Queue of datagrams to be sent after retreiving their ethernet addresses.
+    std::unordered_map<uint32_t, std::list<InternetDatagram>> _datagram_queue{};
+
+    void send_datagram(const InternetDatagram &dgram, const EthernetAddress &address);
 
   public:
     //! \brief Construct a network interface with given Ethernet (network-access-layer) and IP (internet-layer) addresses
