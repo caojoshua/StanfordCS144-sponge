@@ -150,5 +150,4 @@ void NetworkInterface::tick(const size_t ms_since_last_tick) {
         if (temp->second.cache_time > MAX_ETHERNET_CACHE_TIME)
             _cached_ethernet_addresses.erase(temp);
     }
-
 }
