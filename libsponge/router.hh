@@ -3,6 +3,7 @@
 
 #include "network_interface.hh"
 
+#include <list>
 #include <optional>
 #include <queue>
 
@@ -41,6 +42,16 @@ class AsyncNetworkInterface : public NetworkInterface {
 //! \brief A router that has multiple network interfaces and
 //! performs longest-prefix-match routing between them.
 class Router {
+    static constexpr uint8_t PREFIX_MAX_BITS = 32;
+
+    struct Route {
+        uint32_t prefix{};
+        uint8_t prefix_length{};
+        std::optional<Address> next_hop{};
+        size_t interface_num{};
+    };
+    std::list<Route> _routes{};
+
     //! The router's collection of network interfaces
     std::vector<AsyncNetworkInterface> _interfaces{};
 
