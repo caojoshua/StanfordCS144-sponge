@@ -20,7 +20,7 @@ void get_URL(const string &host, const string &path) {
     cerr << "Function called: get_URL(" << host << ", " << path << ").\n";
 
     Address address(host, "http");
-    CS144TCPSocket socket;
+    FullStackSocket socket;
     socket.connect(address);
 
     socket.write("GET " + path + " HTTP/1.1\r\n");
